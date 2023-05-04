@@ -12,7 +12,7 @@ class Model(nn.Module):
         super(Model, self).__init__()
         self.bert: nn.Module = BertModel.from_pretrained(transformer_model_id)
         self.dropout = nn.Dropout(dropout_rate)
-        self.linear = nn.Linear(2048, number_of_labels)
+        self.linear = nn.Linear(768, number_of_labels)
         # self.batch_norm = nn.BatchNorm1d
         # self.softmax = nn.LogSoftmax(dim=1)  # dimension along which softmax will be computed
         # using nn.CrossEntropyLoss. This criterion combines nn.LogSoftmax() and nn.NLLLoss() in one single class.

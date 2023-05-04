@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import torch
+from sklearn.model_selection import train_test_split
 from torch import nn
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import ExponentialLR
@@ -39,20 +40,19 @@ def main():
     labeler = Labeler(df)
 
     train_size, val_size = 0.8, 0.1
-    df_train, df_val, df_test = np.split(
-        df.sample(frac=1, random_state=42), [int(train_size * len(df)), int((train_size + val_size) * len(df))])
-    print(f"{len(df)} split into: {len(df_train)} train, {len(df_val)} validation, {len(df_test)} test")
+    df_train_val, df_test = train_test_split(df, test_size=0.1, random_state=42, stratify=df["label"])
+    df_train, df_val = train_test_split(df_train_val, test_size=0.1, random_state=42, stratify=df_train_val["label"])
 
-    # TODO: check how balanced are the datasets after the split !!!!!!!
+    print(f"{len(df)} split into: {len(df_train)} train, {len(df_val)} validation, {len(df_test)} test,"
+          f" preserving class ratios in the splits.")
 
-    # use_cuda = torch.cuda.is_available()
-    # device = torch.device("cuda" if use_cuda else "cpu")
-    # if use_cuda:
-    #     print("Using CUDA")
-    device = torch.device('cpu')
+    use_cuda = torch.cuda.is_available()
+    device = torch.device("cuda" if use_cuda else "cpu")
+    if use_cuda:
+        print("Using CUDA")
 
-    batch_size: int = 8
-    epochs: int = 5
+    batch_size: int = 24
+    epochs: int = 15
     warmup_steps: int
     learning_rate: float = 1e-4
     label_smoothing: float = 0.0
@@ -68,7 +68,7 @@ def main():
     print_first_i_batches(val_dataloader)
     print_first_i_batches(test_dataloader)
 
-    model = Model(TRANSFORMER_MODEL_ID, device=device, number_of_labels=labeler.number_of_labels, )
+    model = Model(TRANSFORMER_MODEL_ID, device=device, number_of_labels=labeler.number_of_labels)
 
     # CE loss between input logits and target.
     criterion = nn.CrossEntropyLoss(label_smoothing=label_smoothing,  # todo try smoothing
@@ -118,6 +118,11 @@ def main():
                 | Val Accuracy: {total_acc_val / len(df_val): .3f}')
 
     evaluate(model, device, test_dataloader)
+
+    FINETUNED_MODEL_PATH = f"./model_files/finetuned_{TRANSFORMER_MODEL_ID}.pt"
+    if not os.path.exists("./model_files"):
+        os.makedirs("./model_files")
+    torch.save(model.state_dict(), FINETUNED_MODEL_PATH)
 
 
 def evaluate(model: Model, device: torch.device, test_dataloader: DataLoader):
