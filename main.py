@@ -39,7 +39,6 @@ def main():
     df = pd.read_csv(DATA_PATH)
     labeler = Labeler(df)
 
-    train_size, val_size = 0.8, 0.1
     df_train_val, df_test = train_test_split(df, test_size=0.1, random_state=42, stratify=df["label"])
     df_train, df_val = train_test_split(df_train_val, test_size=0.1, random_state=42, stratify=df_train_val["label"])
 
@@ -68,6 +67,8 @@ def main():
     print_first_i_batches(val_dataloader)
     print_first_i_batches(test_dataloader)
 
+    print(len(test_dataloader))
+
     model = Model(TRANSFORMER_MODEL_ID, device=device, number_of_labels=labeler.number_of_labels)
 
     # CE loss between input logits and target.
@@ -79,6 +80,13 @@ def main():
     num_steps = len(train_dataloader) * epochs
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_steps)
     # warmup_scheduler = warmup.UntunedLinearWarmup(optimizer)
+
+    evaluate(model, device, test_dataloader)
+
+    FINETUNED_MODEL_PATH = f"./model_files/finetuned_{TRANSFORMER_MODEL_ID}.pt"
+    if not os.path.exists("./model_files"):
+        os.makedirs("./model_files")
+    torch.save(model.state_dict(), FINETUNED_MODEL_PATH)
 
     for epoch in range(epochs):
         total_acc_train, total_loss_train = 0, 0
@@ -128,10 +136,10 @@ def main():
 def evaluate(model: Model, device: torch.device, test_dataloader: DataLoader):
     total_acc_test = 0
     with torch.no_grad():
-        for test_input, test_label in test_dataloader:
-            test_label = test_label.to(device)
-            mask = test_input['attention_mask'].to(device)
-            input_id = test_input['input_ids'].squeeze(1).to(device)
+        for batch in test_dataloader:
+            test_label = batch['label'].to(device)
+            mask = batch['tokenized_text']['attention_mask'].to(device)
+            input_id = batch['tokenized_text']['input_ids'].squeeze(1).to(device)
 
             output = model(input_id, mask)
             acc = (output.argmax(dim=1) == test_label).sum().item()
